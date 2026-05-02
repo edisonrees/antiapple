@@ -28,6 +28,9 @@ fi
 
 # === DNSMASQ REFINED ===
 # We bind to the specific Tailscale IP and localhost to avoid the 0.0.0.0 conflict
+# ... (Keep Tailscale up and Cert generation the same)
+
+# === DNSMASQ REFINED WITH RETRY ===
 cat > /etc/dnsmasq.conf <<EOF
 port=53
 listen-address=$TS_IP,127.0.0.1
@@ -37,6 +40,17 @@ address=/www.apple.com/$TS_IP
 server=1.1.1.1
 user=root
 EOF
+
+echo "🟢 Starting dnsmasq..."
+# Retry loop to wait for the IP to become "bindable"
+for i in {1..10}; do
+    dnsmasq && break
+    echo "Wait for Tailscale interface to be ready... ($i/10)"
+    sleep 2
+done
+
+echo "🚀 Starting Node App..."
+exec node index.js
 
 echo "🟢 Starting dnsmasq..."
 # Kill any existing dnsmasq just in case, then start
