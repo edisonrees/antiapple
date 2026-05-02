@@ -1,7 +1,7 @@
 {
-  "name": "apple-proxy",
+  "name": "apple-tailscale-proxy",
   "version": "1.0.0",
-  "description": "Apple.com prefix web proxy",
+  "description": "Tailscale VPN + apple.com rewriting proxy",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
