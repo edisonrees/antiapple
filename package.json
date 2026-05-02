@@ -1,11 +1,10 @@
 {
-  "name": "apple-tailscale-mitm-proxy",
+  "name": "apple-dns-spoof-proxy",
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
     "express": "^4.19.2",
     "axios": "^1.7.2",
-    "cheerio": "^1.0.0-rc.12",
-    "http-proxy-middleware": "^2.0.6"
+    "cheerio": "^1.0.0-rc.12"
   }
 }
