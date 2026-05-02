@@ -21,17 +21,23 @@ function ensureCertificates() {
 
   if (!fs.existsSync(KEY_PATH) || !fs.existsSync(CERT_PATH)) {
     console.log('🔑 Generating self-signed certificates for apple.com...');
-    
-    // CA
+
+    // CA (only once)
     if (!fs.existsSync(`${CERT_DIR}/ca.key`)) {
       execSync(`openssl genrsa -out ${CERT_DIR}/ca.key 4096`, { stdio: 'inherit' });
       execSync(`openssl req -x509 -new -nodes -key ${CERT_DIR}/ca.key -sha256 -days 3650 -out ${CERT_DIR}/ca.crt -subj "/C=AU/ST=WA/L=Perth/O=AppleProxy/CN=Apple MITM CA"`, { stdio: 'inherit' });
     }
 
-    // apple.com cert
+    // apple.com key + CSR
     execSync(`openssl genrsa -out ${KEY_PATH} 2048`, { stdio: 'inherit' });
     execSync(`openssl req -new -key ${KEY_PATH} -out ${CERT_DIR}/apple.csr -subj "/CN=apple.com"`, { stdio: 'inherit' });
-    execSync(`openssl x509 -req -days 365 -in ${CERT_DIR}/apple.csr -CA ${CERT_DIR}/ca.crt -CAkey ${CERT_DIR}/ca.key -CAcreateserial -out ${CERT_PATH} -extfile <(echo "subjectAltName=DNS:apple.com,DNS:www.apple.com")`, { stdio: 'inherit', shell: true });
+
+    // Create extension file (this replaces the broken process substitution)
+    const extFile = `${CERT_DIR}/apple.ext`;
+    fs.writeFileSync(extFile, 'subjectAltName = DNS:apple.com, DNS:www.apple.com\n');
+
+    // Sign the certificate using the extension file
+    execSync(`openssl x509 -req -days 365 -in ${CERT_DIR}/apple.csr -CA ${CERT_DIR}/ca.crt -CAkey ${CERT_DIR}/ca.key -CAcreateserial -out ${CERT_PATH} -extfile ${extFile}`, { stdio: 'inherit' });
 
     console.log('✅ Certificates generated successfully!');
   } else {
@@ -39,7 +45,7 @@ function ensureCertificates() {
   }
 }
 
-// Generate certs BEFORE starting the server (no more race condition)
+// Generate certs BEFORE starting the server
 ensureCertificates();
 
 const privateKey = fs.readFileSync(KEY_PATH, 'utf8');
@@ -107,7 +113,7 @@ app.all('/*', async (req, res) => {
   }
 });
 
-// HTTP → HTTPS
+// HTTP → HTTPS redirect
 const httpApp = express();
 httpApp.all('*', (req, res) => res.redirect(301, `https://${req.hostname}${req.url}`));
 
