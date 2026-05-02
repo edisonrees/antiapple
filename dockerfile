@@ -15,7 +15,10 @@ RUN npm install --omit=dev
 # Grant Node.js and Dnsmasq permission to bind to ports 443 and 53
 RUN setcap 'cap_net_bind_service=+ep' $(which node) && \
     setcap 'cap_net_bind_service=+ep' $(which dnsmasq)
-
+RUN apt-get update && apt-get install -y \
+    curl iptables iproute2 ca-certificates dnsmasq openssl libcap2-bin procps \
+    && curl -fsSL https://tailscale.com/install.sh | sh \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 # Copy application code
 COPY index.js ./
 COPY start.sh /start.sh
