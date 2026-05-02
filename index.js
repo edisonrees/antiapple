@@ -20,7 +20,8 @@ const certificate = fs.readFileSync('/certs/apple.crt', 'utf8');
 const proxyApp = express();
 
 proxyApp.all('/*', async (req, res) => {
-  let targetPath = req.path.substring(1) || 'github.com';
+  // Use originalUrl instead of path to preserve query parameters like ?q=search
+  let targetPath = req.originalUrl.substring(1) || 'github.com';
   const targetUrl = targetPath.startsWith('http') ? targetPath : 'https://' + targetPath;
 
   console.log(`🍎 MITM apple.com/${targetPath} → ${targetUrl}`);
@@ -29,7 +30,10 @@ proxyApp.all('/*', async (req, res) => {
     const response = await axios({
       method: req.method,
       url: targetUrl,
-      headers: { 'User-Agent': req.headers['user-agent'], 'Accept': req.headers.accept },
+      headers: { 
+        'User-Agent': req.headers['user-agent'], 
+        'Accept': req.headers.accept 
+      },
       data: req.body,
       responseType: 'arraybuffer',
       maxRedirects: 10,
@@ -38,7 +42,8 @@ proxyApp.all('/*', async (req, res) => {
 
     const contentType = response.headers['content-type'] || '';
     Object.keys(response.headers).forEach(h => {
-      if (!['content-encoding','content-length','transfer-encoding','connection'].includes(h.toLowerCase())) {
+      // Drop headers that interfere with Express's own encoding/chunking
+      if (!['content-encoding','content-length','transfer-encoding','connection', 'content-security-policy'].includes(h.toLowerCase())) {
         res.set(h, response.headers[h]);
       }
     });
@@ -54,6 +59,8 @@ proxyApp.all('/*', async (req, res) => {
           let val = $el.attr(attr);
           if (val && !val.startsWith('#') && !val.startsWith('data:') && !val.startsWith('javascript:') && !val.startsWith('mailto:')) {
             try {
+              // Convert relative URLs to absolute URLs based on the target site, 
+              // then prepend our spoofed apple.com domain
               const absolute = new URL(val, targetUrl).href;
               $el.attr(attr, `https://apple.com/${absolute}`);
             } catch(e) {}
