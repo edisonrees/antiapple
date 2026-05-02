@@ -7,13 +7,13 @@ const fs = require('fs');
 const app = express();
 const HEALTH_PORT = process.env.PORT || 8080;
 
-// Health check + CA download for Railway
+// Health check + CA download
 const healthApp = express();
-healthApp.get('/', (req, res) => res.send('✅ DNS spoof proxy is healthy'));
+healthApp.get('/', (req, res) => res.send('✅ DNS spoof proxy healthy'));
 healthApp.get('/ca.crt', (req, res) => res.download('/certs/ca.crt'));
-healthApp.listen(HEALTH_PORT, '0.0.0.0', () => console.log(`🚀 Health check + CA download on port ${HEALTH_PORT}`));
+healthApp.listen(HEALTH_PORT, '0.0.0.0', () => console.log(`🚀 Health check on port ${HEALTH_PORT}`));
 
-// Real MITM proxy on port 443 (DNS spoofed traffic arrives here)
+// MITM proxy on 443
 const privateKey = fs.readFileSync('/certs/apple.key', 'utf8');
 const certificate = fs.readFileSync('/certs/apple.crt', 'utf8');
 
@@ -23,17 +23,13 @@ proxyApp.all('/*', async (req, res) => {
   let targetPath = req.path.substring(1) || 'github.com';
   const targetUrl = targetPath.startsWith('http') ? targetPath : 'https://' + targetPath;
 
-  console.log(`🍎 DNS-SPOOF MITM → apple.com/${targetPath} → ${targetUrl}`);
+  console.log(`🍎 MITM apple.com/${targetPath} → ${targetUrl}`);
 
   try {
     const response = await axios({
       method: req.method,
       url: targetUrl,
-      headers: {
-        'User-Agent': req.headers['user-agent'],
-        'Accept': req.headers.accept,
-        'Accept-Language': req.headers['accept-language'],
-      },
+      headers: { 'User-Agent': req.headers['user-agent'], 'Accept': req.headers.accept },
       data: req.body,
       responseType: 'arraybuffer',
       maxRedirects: 10,
@@ -41,7 +37,6 @@ proxyApp.all('/*', async (req, res) => {
     });
 
     const contentType = response.headers['content-type'] || '';
-
     Object.keys(response.headers).forEach(h => {
       if (!['content-encoding','content-length','transfer-encoding','connection'].includes(h.toLowerCase())) {
         res.set(h, response.headers[h]);
@@ -79,5 +74,4 @@ proxyApp.all('/*', async (req, res) => {
 https.createServer({ key: privateKey, cert: certificate }, proxyApp)
   .listen(443, '0.0.0.0', () => {
     console.log('🚀 Apple.com DNS-spoof MITM proxy running on port 443');
-    console.log('✅ You can now type https://apple.com/github.com in Safari');
   });
