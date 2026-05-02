@@ -1,24 +1,34 @@
 #!/bin/bash
-echo "🔄 Starting Tailscale + Apple Proxy..."
+echo "🔄 Starting Tailscale + dnsmasq + Apple.com MITM Proxy..."
 
-# Start Tailscale daemon (userspace mode for containers)
+# Start Tailscale
 tailscaled --tun=userspace-networking --socks5-server=localhost:1080 &
 
-sleep 4
+sleep 5
 
-# Connect to Tailscale + enable as Exit Node
 tailscale up --authkey=${TAILSCALE_AUTHKEY} \
-  --hostname=apple-proxy \
+  --hostname=apple-mitm-proxy \
   --advertise-exit-node \
   --accept-routes \
   --accept-dns=false
 
-echo "✅ Tailscale VPN is running as Exit Node!"
-echo "📍 Your private Tailscale IP: $(tailscale ip -4)"
-echo "🌐 Proxy URL: http://$(tailscale ip -4):8080/apple.com/github.com"
-echo ""
-echo "👉 On iOS: Open Tailscale app → enable this Exit Node"
-echo "Then open Safari → go to the proxy URL above"
+TS_IP=$(tailscale ip -4)
+echo "📍 Tailscale IP: $TS_IP"
 
-# Keep container alive
-node index.js & tail -f /dev/null
+# Generate self-signed CA + certificate for apple.com (one-time)
+mkdir -p /certs
+if [ ! -f /certs/ca.key ]; then
+  openssl genrsa -out /certs/ca.key 4096
+  openssl req -x509 -new -nodes -key /certs/ca.key -sha256 -days 3650 -out /certs/ca.crt \
+    -subj "/C=AU/ST=WA/L=Perth/O=AppleProxy/CN=Apple MITM CA"
+fi
+if [ ! -f /certs/apple.key ]; then
+  openssl genrsa -out /certs/apple.key 2048
+  openssl req -new -key /certs/apple.key -out /certs/apple.csr -subj "/CN=apple.com"
+  openssl x509 -req -days 365 -in /certs/apple.csr -CA /certs/ca.crt -CAkey /certs/ca.key -CAcreateserial -out /certs/apple.crt -extfile <(echo "subjectAltName=DNS:apple.com,DNS:www.apple.com")
+fi
+
+echo "✅ Self-signed Apple.com certificate generated"
+
+# Start dnsmasq to spoof apple.com → our Tailscale IP
+cat > /etc/dnsmasq.conf <
