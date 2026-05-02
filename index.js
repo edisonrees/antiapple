@@ -78,7 +78,15 @@ proxyApp.all('/*', async (req, res) => {
   }
 });
 
+// At the bottom of index.js, change the .listen lines:
+
+// Public Health Check (for Railway)
+healthApp.listen(HEALTH_PORT, '0.0.0.0', () => {
+  console.log(`🚀 Railway Health Check on ${HEALTH_PORT}`);
+});
+
+// Private MITM Proxy (for your iPhone via Tailscale)
 https.createServer({ key: privateKey, cert: certificate }, proxyApp)
   .listen(443, '0.0.0.0', () => {
-    console.log('🚀 Apple.com DNS-spoof MITM proxy running on port 443');
+    console.log('🚀 MITM Proxy listening on Tailscale Port 443');
   });
