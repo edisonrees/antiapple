@@ -1,10 +1,12 @@
 #!/bin/bash
 echo "🔄 Starting Tailscale + dnsmasq + Apple.com DNS spoof proxy..."
 
+# Start Tailscale daemon
 tailscaled --tun=userspace-networking --socks5-server=localhost:1080 &
 
 sleep 5
 
+# Bring Tailscale up
 tailscale up --authkey=${TAILSCALE_AUTHKEY} \
   --hostname=apple-dns-spoof \
   --advertise-exit-node \
@@ -33,7 +35,7 @@ fi
 
 echo "✅ Certificates generated successfully"
 
-# === WAIT FOR CERTS (the fix) ===
+# === WAIT FOR CERTS ===
 echo "⏳ Waiting for certificates to be fully written..."
 while [ ! -f /certs/apple.key ] || [ ! -f /certs/apple.crt ]; do
   echo "   Still waiting for certs..."
@@ -41,5 +43,20 @@ while [ ! -f /certs/apple.key ] || [ ! -f /certs/apple.crt ]; do
 done
 echo "✅ Certificates confirmed ready"
 
-# dnsmasq
-cat > /etc/dnsmasq.conf <
+# === DNSMASQ CONFIGURATION ===
+# Route apple.com directly to the Tailscale IP. Forward everything else to Cloudflare/Google.
+cat > /etc/dnsmasq.conf <<EOF
+port=53
+listen-address=0.0.0.0
+bind-dynamic
+address=/apple.com/$TS_IP
+address=/www.apple.com/$TS_IP
+server=1.1.1.1
+server=8.8.8.8
+EOF
+
+echo "🟢 Starting dnsmasq..."
+dnsmasq
+
+echo "🚀 Starting Node Proxy..."
+exec node /app/index.js
