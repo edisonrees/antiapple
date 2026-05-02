@@ -34,7 +34,7 @@ fi
 echo "✅ Certificates generated successfully at /certs/"
 
 # Wait just to be 100% sure files are written
-sleep 2
+sleep 10
 
 # Start dnsmasq to spoof apple.com → our Tailscale IP
 cat > /etc/dnsmasq.conf <
