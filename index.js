@@ -3,19 +3,53 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const https = require('https');
 const fs = require('fs');
+const { execSync } = require('child_process');
 
 const app = express();
 const PORT_HTTP = 80;
 const PORT_HTTPS = 443;
 
-const privateKey = fs.readFileSync('/certs/apple.key', 'utf8');
-const certificate = fs.readFileSync('/certs/apple.crt', 'utf8');
+const CERT_DIR = '/certs';
+const KEY_PATH = `${CERT_DIR}/apple.key`;
+const CERT_PATH = `${CERT_DIR}/apple.crt`;
+const CA_CERT_PATH = `${CERT_DIR}/ca.crt`;
+
+function ensureCertificates() {
+  if (!fs.existsSync(CERT_DIR)) {
+    fs.mkdirSync(CERT_DIR, { recursive: true });
+  }
+
+  if (!fs.existsSync(KEY_PATH) || !fs.existsSync(CERT_PATH)) {
+    console.log('🔑 Generating self-signed certificates for apple.com...');
+    
+    // CA
+    if (!fs.existsSync(`${CERT_DIR}/ca.key`)) {
+      execSync(`openssl genrsa -out ${CERT_DIR}/ca.key 4096`, { stdio: 'inherit' });
+      execSync(`openssl req -x509 -new -nodes -key ${CERT_DIR}/ca.key -sha256 -days 3650 -out ${CERT_DIR}/ca.crt -subj "/C=AU/ST=WA/L=Perth/O=AppleProxy/CN=Apple MITM CA"`, { stdio: 'inherit' });
+    }
+
+    // apple.com cert
+    execSync(`openssl genrsa -out ${KEY_PATH} 2048`, { stdio: 'inherit' });
+    execSync(`openssl req -new -key ${KEY_PATH} -out ${CERT_DIR}/apple.csr -subj "/CN=apple.com"`, { stdio: 'inherit' });
+    execSync(`openssl x509 -req -days 365 -in ${CERT_DIR}/apple.csr -CA ${CERT_DIR}/ca.crt -CAkey ${CERT_DIR}/ca.key -CAcreateserial -out ${CERT_PATH} -extfile <(echo "subjectAltName=DNS:apple.com,DNS:www.apple.com")`, { stdio: 'inherit', shell: true });
+
+    console.log('✅ Certificates generated successfully!');
+  } else {
+    console.log('✅ Certificates already exist – reusing them');
+  }
+}
+
+// Generate certs BEFORE starting the server (no more race condition)
+ensureCertificates();
+
+const privateKey = fs.readFileSync(KEY_PATH, 'utf8');
+const certificate = fs.readFileSync(CERT_PATH, 'utf8');
 const credentials = { key: privateKey, cert: certificate };
 
 const proxyBase = 'https://apple.com';
 
 app.all('/*', async (req, res) => {
-  let targetPath = req.path.substring(1); // remove leading /
+  let targetPath = req.path.substring(1);
   if (!targetPath) return res.redirect('/github.com');
 
   let targetUrl = targetPath.startsWith('http') ? targetPath : 'https://' + targetPath;
@@ -30,7 +64,6 @@ app.all('/*', async (req, res) => {
         'User-Agent': req.headers['user-agent'],
         'Accept': req.headers.accept,
         'Accept-Language': req.headers['accept-language'],
-        'Referer': req.headers.referer,
       },
       data: req.body,
       responseType: 'arraybuffer',
@@ -40,9 +73,8 @@ app.all('/*', async (req, res) => {
 
     const contentType = response.headers['content-type'] || '';
 
-    // Copy headers (skip hop-by-hop)
     Object.keys(response.headers).forEach(h => {
-      if (!['content-encoding', 'content-length', 'transfer-encoding', 'connection'].includes(h.toLowerCase())) {
+      if (!['content-encoding','content-length','transfer-encoding','connection'].includes(h.toLowerCase())) {
         res.set(h, response.headers[h]);
       }
     });
@@ -51,7 +83,7 @@ app.all('/*', async (req, res) => {
       let html = response.data.toString('utf-8');
       const $ = cheerio.load(html);
 
-      const attrs = ['href', 'src', 'action', 'data-src', 'data-href', 'poster'];
+      const attrs = ['href','src','action','data-src','data-href','poster'];
       $(attrs.map(a => `[${a}]`).join(',')).each((_, el) => {
         const $el = $(el);
         for (let attr of attrs) {
@@ -70,18 +102,17 @@ app.all('/*', async (req, res) => {
       res.send(Buffer.from(response.data));
     }
   } catch (err) {
-    console.error(err);
+    console.error(err.message);
     res.status(502).send(`Proxy error: ${err.message}`);
   }
 });
 
-// HTTP → HTTPS redirect
+// HTTP → HTTPS
 const httpApp = express();
 httpApp.all('*', (req, res) => res.redirect(301, `https://${req.hostname}${req.url}`));
 
-// Start servers
-const httpServer = httpApp.listen(PORT_HTTP, '0.0.0.0', () => console.log(`🚀 HTTP (redirect) on port ${PORT_HTTP}`));
-const httpsServer = https.createServer(credentials, app).listen(PORT_HTTPS, '0.0.0.0', () => {
-  console.log(`🚀 HTTPS MITM Proxy listening on port ${PORT_HTTPS}`);
-  console.log(`✅ You can now type https://apple.com/github.com in any browser`);
+httpApp.listen(PORT_HTTP, '0.0.0.0', () => console.log(`🚀 HTTP redirect on port ${PORT_HTTP}`));
+https.createServer(credentials, app).listen(PORT_HTTPS, '0.0.0.0', () => {
+  console.log(`🚀 HTTPS Apple.com MITM Proxy running on ${PORT_HTTPS}`);
+  console.log(`✅ Ready – type https://apple.com/github.com in Safari after setup`);
 });
