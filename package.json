@@ -1,14 +1,11 @@
 {
-  "name": "apple-tailscale-proxy",
+  "name": "apple-tailscale-mitm-proxy",
   "version": "1.0.0",
-  "description": "Tailscale VPN + apple.com rewriting proxy",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
   "dependencies": {
     "express": "^4.19.2",
     "axios": "^1.7.2",
-    "cheerio": "^1.0.0-rc.12"
+    "cheerio": "^1.0.0-rc.12",
+    "http-proxy-middleware": "^2.0.6"
   }
 }
