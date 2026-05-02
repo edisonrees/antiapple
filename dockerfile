@@ -8,17 +8,17 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy package file and install dependencies
+# Copy package.json
 COPY package.json ./
-# Replacing 'npm ci' with 'npm install --omit=dev' to handle missing lockfiles
+
+# Since you're on GitHub Web, we use this to avoid the lockfile requirement
 RUN npm install --omit=dev
 
-# Copy application files
+# Copy the rest
 COPY index.js ./
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-# Expose necessary ports
 EXPOSE 53 80 443 8080
 
 ENTRYPOINT ["/start.sh"]
