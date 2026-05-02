@@ -1,25 +1,28 @@
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const https = require('https');
+const fs = require('fs');
 
 const app = express();
-const PORT = 8080;
+const PORT_HTTP = 80;
+const PORT_HTTPS = 443;
 
-app.use(express.raw({ type: '*/*', limit: '50mb' }));
+const privateKey = fs.readFileSync('/certs/apple.key', 'utf8');
+const certificate = fs.readFileSync('/certs/apple.crt', 'utf8');
+const credentials = { key: privateKey, cert: certificate };
+
+const proxyBase = 'https://apple.com';
 
 app.all('/*', async (req, res) => {
-  let path = req.path.substring(1);
-  if (path.startsWith('apple.com/')) path = path.substring(11);
+  let targetPath = req.path.substring(1); // remove leading /
+  if (!targetPath) return res.redirect('/github.com');
 
-  let targetUrl = path.startsWith('http') ? path : 'https://' + path;
+  let targetUrl = targetPath.startsWith('http') ? targetPath : 'https://' + targetPath;
 
-  if (!path) {
-    return res.send('✅ Usage: /apple.com/github.com or /apple.com/https://example.com');
-  }
+  console.log(`🍎 MITM → ${req.method} ${targetUrl} (Host: ${req.headers.host})`);
 
   try {
-    console.log(`🍎 Proxying ${req.method} → ${targetUrl}`);
-
     const response = await axios({
       method: req.method,
       url: targetUrl,
@@ -29,7 +32,7 @@ app.all('/*', async (req, res) => {
         'Accept-Language': req.headers['accept-language'],
         'Referer': req.headers.referer,
       },
-      data: req.body.length ? req.body : undefined,
+      data: req.body,
       responseType: 'arraybuffer',
       maxRedirects: 10,
       validateStatus: () => true
@@ -37,19 +40,18 @@ app.all('/*', async (req, res) => {
 
     const contentType = response.headers['content-type'] || '';
 
+    // Copy headers (skip hop-by-hop)
     Object.keys(response.headers).forEach(h => {
-      if (!['content-encoding','content-length','transfer-encoding','connection'].includes(h.toLowerCase())) {
+      if (!['content-encoding', 'content-length', 'transfer-encoding', 'connection'].includes(h.toLowerCase())) {
         res.set(h, response.headers[h]);
       }
     });
 
-    if (contentType.includes('text/html') || contentType.includes('application/xhtml+xml')) {
+    if (contentType.includes('text/html') || contentType.includes('application/xhtml')) {
       let html = response.data.toString('utf-8');
       const $ = cheerio.load(html);
 
-      const proxyBase = `http://${req.hostname}:${PORT}`;
-
-      const attrs = ['href','src','action','data-src','data-href','poster'];
+      const attrs = ['href', 'src', 'action', 'data-src', 'data-href', 'poster'];
       $(attrs.map(a => `[${a}]`).join(',')).each((_, el) => {
         const $el = $(el);
         for (let attr of attrs) {
@@ -57,7 +59,7 @@ app.all('/*', async (req, res) => {
           if (val && !val.startsWith('#') && !val.startsWith('data:') && !val.startsWith('javascript:') && !val.startsWith('mailto:')) {
             try {
               const absolute = new URL(val, targetUrl).href;
-              $el.attr(attr, `${proxyBase}/apple.com/${absolute}`);
+              $el.attr(attr, `${proxyBase}/${absolute}`);
             } catch(e) {}
           }
         }
@@ -68,11 +70,18 @@ app.all('/*', async (req, res) => {
       res.send(Buffer.from(response.data));
     }
   } catch (err) {
-    console.error(err.message);
+    console.error(err);
     res.status(502).send(`Proxy error: ${err.message}`);
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Apple rewriting proxy listening on 0.0.0.0:${PORT}`);
+// HTTP → HTTPS redirect
+const httpApp = express();
+httpApp.all('*', (req, res) => res.redirect(301, `https://${req.hostname}${req.url}`));
+
+// Start servers
+const httpServer = httpApp.listen(PORT_HTTP, '0.0.0.0', () => console.log(`🚀 HTTP (redirect) on port ${PORT_HTTP}`));
+const httpsServer = https.createServer(credentials, app).listen(PORT_HTTPS, '0.0.0.0', () => {
+  console.log(`🚀 HTTPS MITM Proxy listening on port ${PORT_HTTPS}`);
+  console.log(`✅ You can now type https://apple.com/github.com in any browser`);
 });
