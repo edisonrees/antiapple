@@ -14,8 +14,7 @@ COPY index.js ./
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-EXPOSE 53 80 443
+EXPOSE 53 80 443 ${PORT:-8080}
 
-# This forces Railway to ALWAYS run start.sh first
 ENTRYPOINT ["/start.sh"]
 CMD []
