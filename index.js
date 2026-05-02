@@ -42,8 +42,9 @@ proxyApp.all('/*', async (req, res) => {
 
 // 4. HTTPS SERVER
 const options = {
-    key: fs.readFileSync('/certs/apple.key'),
-    cert: fs.readFileSync('/certs/apple.crt')
+    // This points to the files you committed to the repo
+    key: fs.readFileSync('./certs/apple.key'), 
+    cert: fs.readFileSync('./certs/apple.crt')
 };
 
 https.createServer(options, proxyApp).listen(443, '0.0.0.0', () => {
