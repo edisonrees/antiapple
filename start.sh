@@ -31,10 +31,15 @@ fi
 # ... (Keep Tailscale up and Cert generation the same)
 
 # === DNSMASQ REFINED WITH RETRY ===
+# === DNSMASQ REFINED FOR USERSPACE ===
+# We listen on 0.0.0.0 but allow it to bind even if the interface isn't "visible" yet
 cat > /etc/dnsmasq.conf <<EOF
 port=53
-listen-address=$TS_IP,127.0.0.1
-bind-interfaces
+listen-address=0.0.0.0
+# Important for userspace:
+bind-dynamic
+interface=lo
+# Spoofing rules
 address=/apple.com/$TS_IP
 address=/www.apple.com/$TS_IP
 server=1.1.1.1
@@ -42,12 +47,9 @@ user=root
 EOF
 
 echo "🟢 Starting dnsmasq..."
-# Retry loop to wait for the IP to become "bindable"
-for i in {1..10}; do
-    dnsmasq && break
-    echo "Wait for Tailscale interface to be ready... ($i/10)"
-    sleep 2
-done
+# Remove the loop, just start it. bind-dynamic handles the wait.
+pkill dnsmasq
+dnsmasq
 
 echo "🚀 Starting Node App..."
 exec node index.js
