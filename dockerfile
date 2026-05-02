@@ -20,6 +20,9 @@ COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
 EXPOSE 53 80 443 8080
-
+# Give Node and Dnsmasq permission to use low ports (443, 53) without being root
+RUN apt-get update && apt-get install -y libcap2-bin && \
+    setcap 'cap_net_bind_service=+ep' $(which node) && \
+    setcap 'cap_net_bind_service=+ep' $(which dnsmasq)
 ENTRYPOINT ["/start.sh"]
 CMD []
