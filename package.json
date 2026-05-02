@@ -1,0 +1,14 @@
+{
+  "name": "apple-proxy",
+  "version": "1.0.0",
+  "description": "Apple.com prefix web proxy",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "axios": "^1.7.2",
+    "cheerio": "^1.0.0-rc.12"
+  }
+}
