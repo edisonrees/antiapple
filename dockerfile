@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 # Copy application code
 COPY index.js ./
+COPY apple.crt ./
+COPY apple.key ./
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
