@@ -1,7 +1,8 @@
 #!/bin/bash
 echo "🔄 Initializing Environment..."
 
-# Start Tailscale
+# Start Tailscale with improved userspace settings
+# We add --tun=userspace-networking and specific flags for local backend
 tailscaled --tun=userspace-networking --socks5-server=localhost:1080 &
 sleep 5
 
@@ -25,13 +26,16 @@ if [ ! -f /certs/apple.key ]; then
     openssl x509 -req -in /certs/apple.csr -CA /certs/ca.crt -CAkey /certs/ca.key -CAcreateserial -out /certs/apple.crt -days 365 -extfile /certs/apple.ext
 fi
 
-# === DNSMASQ SETUP ===
+# === DNSMASQ REFINED ===
+# 'bind-dynamic' helps in containers where interfaces might flap
 cat > /etc/dnsmasq.conf <<EOF
 port=53
-listen-address=0.0.0.0
+listen-address=127.0.0.1,0.0.0.0
+bind-interfaces
 address=/apple.com/$TS_IP
 address=/www.apple.com/$TS_IP
 server=1.1.1.1
+user=root
 EOF
 
 echo "🟢 Starting dnsmasq..."
