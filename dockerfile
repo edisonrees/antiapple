@@ -16,4 +16,6 @@ RUN chmod +x /start.sh
 
 EXPOSE 53 80 443
 
-CMD ["/start.sh"]
+# This forces Railway to ALWAYS run start.sh first
+ENTRYPOINT ["/start.sh"]
+CMD []
