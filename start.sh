@@ -27,16 +27,21 @@ if [ ! -f /certs/apple.key ]; then
 fi
 
 # === DNSMASQ REFINED ===
-# 'bind-dynamic' helps in containers where interfaces might flap
+# We bind to the specific Tailscale IP and localhost to avoid the 0.0.0.0 conflict
 cat > /etc/dnsmasq.conf <<EOF
 port=53
-listen-address=127.0.0.1,0.0.0.0
+listen-address=$TS_IP,127.0.0.1
 bind-interfaces
 address=/apple.com/$TS_IP
 address=/www.apple.com/$TS_IP
 server=1.1.1.1
 user=root
 EOF
+
+echo "🟢 Starting dnsmasq..."
+# Kill any existing dnsmasq just in case, then start
+pkill dnsmasq
+dnsmasq
 
 echo "🟢 Starting dnsmasq..."
 dnsmasq
